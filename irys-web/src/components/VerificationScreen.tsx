@@ -41,6 +41,8 @@ export const VerificationScreen: React.FC<VerificationScreenProps> = ({ imageFil
         setRows(newRows);
     };
 
+    const isSaving = statusMessage?.includes("Saving") || statusMessage?.includes("Exporting");
+
     return (
         <div className="flex flex-col h-[calc(100vh-6rem)] gap-4 animate-in fade-in duration-500">
             {/* Header Actions */}
@@ -54,16 +56,21 @@ export const VerificationScreen: React.FC<VerificationScreenProps> = ({ imageFil
                 <div className="flex gap-2">
                     <button
                         onClick={onBack}
-                        className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors border border-transparent hover:border-zinc-800 rounded-sm"
+                        disabled={isSaving}
+                        className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors border border-transparent hover:border-zinc-800 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         &larr; Back
                     </button>
                     <button
-                        onClick={() => onExport(rows)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-sm text-sm font-medium shadow-lg shadow-emerald-900/20 flex items-center gap-2"
+                        onClick={() => !isSaving && onExport(rows)}
+                        disabled={isSaving}
+                        className={`px-4 py-2 rounded-sm text-sm font-medium shadow-lg flex items-center gap-2 transition-all ${isSaving
+                                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                                : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20"
+                            }`}
                     >
-                        <span>Export Database</span>
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <span>{isSaving ? "Exporting..." : "Export Database"}</span>
+                        <svg className={`w-4 h-4 ${isSaving ? "animate-pulse" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                     </button>
@@ -144,6 +151,7 @@ export const VerificationScreen: React.FC<VerificationScreenProps> = ({ imageFil
                                                     className="w-full h-full bg-transparent px-4 py-3 text-sm text-zinc-200 outline-none focus:bg-accent/5 focus:shadow-[inset_0_0_0_1px_var(--color-accent)] transition-all font-medium placeholder-zinc-700"
                                                     spellCheck={false}
                                                     placeholder="..."
+                                                    disabled={isSaving}
                                                 />
                                             </td>
                                         ))}
@@ -152,7 +160,11 @@ export const VerificationScreen: React.FC<VerificationScreenProps> = ({ imageFil
                             </tbody>
                         </table>
                         <div className="p-3 border-t border-border bg-zinc-900/30 backdrop-blur-sm sticky bottom-0">
-                            <button onClick={() => setRows([...rows, {}])} className="w-full py-2.5 text-xs font-medium text-zinc-500 hover:text-accent hover:bg-accent/5 hover:border-accent/40 rounded border border-dashed border-zinc-700 transition-all uppercase tracking-wide">
+                            <button
+                                onClick={() => setRows([...rows, {}])}
+                                disabled={isSaving}
+                                className="w-full py-2.5 text-xs font-medium text-zinc-500 hover:text-accent hover:bg-accent/5 hover:border-accent/40 rounded border border-dashed border-zinc-700 transition-all uppercase tracking-wide disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
                                 + Add Empty Row
                             </button>
                         </div>
