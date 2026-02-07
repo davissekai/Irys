@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+temp_*
+
+# Node
+irys-web/node_modules/
+irys-web/dist/
+irys-web/dist-ssr/
+irys-web/*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Irys Specific
+student_walkins_output.json
+test_image_output.json
+real_register_output.json
+register_sample_output.json
+test_dummy_output.json
+*.log
+*.tmp
