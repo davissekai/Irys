@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: irys-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: GCP_PROJECT_ID
+        sync: false
+      - key: DOCAI_PROCESSOR_ID
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        sync: false
+      - key: EXTRACT_TIMEOUT_SECONDS
+        value: 90

@@ -34,6 +34,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+async def root():
+    return {"status": "ready", "message": "Irys API is live"}
+
 @app.post("/extract")
 async def extract_api(
     file: UploadFile = File(...),
