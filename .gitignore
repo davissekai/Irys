@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .env
+.env.local
 .venv
 env/
 venv/
@@ -12,6 +13,7 @@ venv.bak/
 temp_*
 
 # Node
+node_modules/
 irys-web/node_modules/
 irys-web/dist/
 irys-web/dist-ssr/
@@ -29,3 +31,9 @@ register_sample_output.json
 test_dummy_output.json
 *.log
 *.tmp
+
+# Secrets / Credentials
+gen-lang-client*.json
+gen-lang-client-*.json
+*service-account*.json
+*credentials*.json
