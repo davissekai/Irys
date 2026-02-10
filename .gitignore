@@ -29,6 +29,18 @@ test_image_output.json
 real_register_output.json
 register_sample_output.json
 test_dummy_output.json
+student_walkins_docai_output.json
+test_1.jpeg
+test_dummy.jpg
+test_image.png
+real_register.jpg
+register_sample.png
+student_walkins.png
+test_db.py
+test_ocr.py
+Project_Irys_Spec.md
+SESSION_SUMMARY_*.md
+irys-web/snapshot.jpeg
 *.log
 *.tmp
 
