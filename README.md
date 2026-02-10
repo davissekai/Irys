@@ -1,5 +1,5 @@
 # Irys Project
-
+(Will be updated soon)
 Digitization app for paper registers.
 
 ## Setup
