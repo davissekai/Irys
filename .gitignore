@@ -43,6 +43,8 @@ SESSION_SUMMARY_*.md
 irys-web/snapshot.jpeg
 *.log
 *.tmp
+glm_*_resp.txt
+last_glm_response.txt
 
 # Secrets / Credentials
 gen-lang-client*.json

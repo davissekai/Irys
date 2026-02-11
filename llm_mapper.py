@@ -16,6 +16,18 @@ OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "stepfun/step-3.5-flash")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
+def _sanitize_mapping(mapping: dict, desired_columns: list) -> dict:
+    """
+    Ensure mapping keys exactly match desired columns and values are safe.
+    Extra keys are ignored; missing keys are filled with None.
+    """
+    safe_mapping = {}
+    for key in desired_columns:
+        value = mapping.get(key) if isinstance(mapping, dict) else None
+        safe_mapping[key] = value if isinstance(value, str) and value.strip() else None
+    return safe_mapping
+
+
 def map_columns_with_llm(extracted_headers: list, desired_columns: list) -> dict:
     """
     Uses LLM to intelligently map extracted column headers to user-desired columns.
@@ -76,8 +88,9 @@ Your response (JSON only, no markdown, no explanation):"""
         content = content.strip()
         
         mapping = json.loads(content)
-        print(f"[LLM Mapper] Generated mapping: {mapping}")
-        return mapping
+        safe_mapping = _sanitize_mapping(mapping, desired_columns)
+        print(f"[LLM Mapper] Generated mapping: {safe_mapping}")
+        return safe_mapping
         
     except Exception as e:
         print(f"[LLM Mapper] Error: {e}, falling back to exact matching")

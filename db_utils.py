@@ -6,17 +6,37 @@ Handles dynamic table creation and data insertion into Supabase PostgreSQL.
 import os
 import re
 from sqlalchemy import create_engine, MetaData, Table, Column, String, inspect, text
-from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+
+def _normalize_database_url(raw_url: str) -> str:
+    """
+    Normalize common copy/paste mistakes in DATABASE_URL.
+    Handles accidental wrapping quotes and quoted host fragments.
+    """
+    url = (raw_url or "").strip()
+    if not url:
+        return url
+
+    if (url.startswith('"') and url.endswith('"')) or (url.startswith("'") and url.endswith("'")):
+        url = url[1:-1].strip()
+
+    # Example bad fragment: @\"db.project.supabase.co\" or @"db..."
+    url = url.replace('@\\"', "@").replace('\\"', "")
+    url = url.replace("@'", "@").replace("'", "")
+    url = url.replace('@"', "@").replace('"', "")
+    return url
 
 def get_engine():
-    if not DATABASE_URL:
+    database_url = _normalize_database_url(os.environ.get("DATABASE_URL"))
+    if database_url and database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+    if not database_url:
         raise ValueError("DATABASE_URL not found in environment variables.")
-    return create_engine(DATABASE_URL)
+    return create_engine(database_url)
 
 def sanitize_name(name):
     """Sanitize names for PostgreSQL table/column names."""
@@ -27,6 +47,23 @@ def sanitize_name(name):
     # Remove consecutive underscores
     s = re.sub(r'_+', '_', s)
     return s.strip('_')
+
+
+def _collect_headers(rows: list) -> list:
+    seen = set()
+    ordered_headers = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for key in row.keys():
+            if key == "__meta":
+                continue
+            sanitized = sanitize_name(str(key))
+            if not sanitized or sanitized in seen:
+                continue
+            seen.add(sanitized)
+            ordered_headers.append(sanitized)
+    return ordered_headers
 
 def save_to_db(event_name: str, rows: list):
     """
@@ -42,47 +79,49 @@ def save_to_db(event_name: str, rows: list):
 
     engine = get_engine()
     metadata = MetaData()
-    
-    # Extract headers from the first row
-    sample_row = rows[0]
-    headers = [k for k in sample_row.keys() if k != '__meta']
+
+    headers = _collect_headers(rows)
+    if not headers:
+        return {"success": True, "message": "No usable data columns found in rows."}
     
     # Check if table exists
     inspector = inspect(engine)
     
-    # Create column definitions
-    columns = [
-        Column('id', String, primary_key=True), # We'll generate a simple one or just omit pk if not needed
-    ]
-    
-    # For MVP, we'll use a simple approach: 
-    # If table doesn't exist, create it with String columns for all headers.
-    
+    # Keep dynamic per-event tables for MVP.
     with engine.begin() as conn:
         if not inspector.has_table(table_name):
             print(f"[DB] Creating table: {table_name}")
-            cols = [Column(sanitize_name(h), String) for h in headers]
-            dynamic_table = Table(table_name, metadata, *cols)
+            cols = [Column(h, String) for h in headers]
+            Table(table_name, metadata, *cols)
             metadata.create_all(engine)
+            existing_cols = set(headers)
         else:
             # Schema Evolution: Check for missing columns
-            existing_cols = [c['name'] for c in inspector.get_columns(table_name)]
-            for h in headers:
-                sanitized_h = sanitize_name(h)
-                if sanitized_h not in existing_cols:
-                    print(f"[DB] Adding missing column: {sanitized_h} to {table_name}")
-                    conn.execute(text(f'ALTER TABLE {table_name} ADD COLUMN "{sanitized_h}" TEXT'))
-        
+            existing_cols = {c['name'] for c in inspector.get_columns(table_name)}
+            for header in headers:
+                if header not in existing_cols:
+                    print(f"[DB] Adding missing column: {header} to {table_name}")
+                    conn.execute(text(f'ALTER TABLE {table_name} ADD COLUMN "{header}" TEXT'))
+                    existing_cols.add(header)
+
         # Prepare batch insert
         clean_rows = []
         for row in rows:
-            clean_row = {sanitize_name(k): str(v) for k, v in row.items() if k != '__meta'}
+            if not isinstance(row, dict):
+                continue
+            clean_row = {}
+            for col in headers:
+                clean_row[col] = None
+            for key, value in row.items():
+                if key == "__meta":
+                    continue
+                sanitized_key = sanitize_name(str(key))
+                if sanitized_key and sanitized_key in clean_row:
+                    clean_row[sanitized_key] = None if value is None else str(value)
             clean_rows.append(clean_row)
             
         if clean_rows:
-            # Use the keys from the first row as the template for columns
-            # In a batch insert, all rows must have the same keys (filled with None/empty if missing)
-            all_cols = list(clean_rows[0].keys())
+            all_cols = headers
             cols_str = ", ".join([f'"{c}"' for c in all_cols])
             vals_str = ", ".join([f":{c}" for c in all_cols])
             stmt = text(f"INSERT INTO {table_name} ({cols_str}) VALUES ({vals_str})")
