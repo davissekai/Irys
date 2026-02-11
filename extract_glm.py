@@ -18,6 +18,13 @@ DEFAULT_GLM_URL = "https://api.z.ai/api/paas/v4/layout_parsing"
 DEFAULT_GLM_MODEL = "glm-ocr"
 
 
+def _clean_secret(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return value
+    # Remove accidental whitespace/newlines from copied API keys.
+    return "".join(value.split())
+
+
 def _to_data_uri(file_path: str, mime_type: Optional[str] = None) -> str:
     if not mime_type:
         guessed, _ = mimetypes.guess_type(file_path)
@@ -157,7 +164,7 @@ def extract_table_glm(
     base_url: Optional[str] = None,
     model: Optional[str] = None,
 ) -> Dict[str, Any]:
-    api_key = api_key or os.environ.get("GLM_OCR_API_KEY")
+    api_key = _clean_secret(api_key or os.environ.get("GLM_OCR_API_KEY"))
     base_url = base_url or os.environ.get("GLM_OCR_BASE_URL", DEFAULT_GLM_URL)
     model = model or os.environ.get("GLM_OCR_MODEL", DEFAULT_GLM_MODEL)
 

@@ -15,6 +15,9 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "stepfun/step-3.5-flash")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+if OPENROUTER_API_KEY:
+    OPENROUTER_API_KEY = "".join(OPENROUTER_API_KEY.split())
+
 
 def _sanitize_mapping(mapping: dict, desired_columns: list) -> dict:
     """
