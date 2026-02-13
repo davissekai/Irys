@@ -14,13 +14,13 @@ This is the recommended split for phone usage. The app remains available even wh
 
 1. **Install Dependencies**
    ```bash
-   pip install "paddleocr[all]" paddlepaddle
+   pip install -r requirements.txt
    ```
 
-2. **Initialize & Download Models**
-   Run the test script once to trigger the automatic model download (~1-2GB).
+2. **Configure Environment**
+   Copy `.env.example` to `.env` and set:
    ```bash
-   python test_ocr.py
+   GLM_OCR_API_KEY=your_key_here
    ```
 
 ## Usage
@@ -29,7 +29,7 @@ This is the recommended split for phone usage. The app remains available even wh
 To extract structured data from a register image:
 
 ```bash
-python extract.py path/to/image.jpg
+python extract_glm.py path/to/image.jpg
 ```
 
 This will output a JSON file named `image_output.json` in the same directory.
@@ -40,7 +40,7 @@ This will output a JSON file named `image_output.json` in the same directory.
    - Deploy this repo as a Python web service.
    - Start command: `python api.py`
    - Add backend env vars from `.env.example`.
-   - Set `OCR_PROVIDER=glm` and configure `GLM_OCR_API_KEY`.
+   - Configure `GLM_OCR_API_KEY` (GLM-only OCR pipeline).
    - Set `FRONTEND_ORIGINS` to your Vercel production URL.
    - Keep `FRONTEND_ORIGIN_REGEX=https://.*\.vercel\.app` to allow Vercel preview deployments.
 
@@ -55,6 +55,5 @@ This will output a JSON file named `image_output.json` in the same directory.
    - OCR time usually dominates network latency; cross-platform overhead is typically much smaller than OCR compute time.
 
 ## Project Structure
-- `extract.py`: Main script for OCR extraction.
-- `test_ocr.py`: Setup and verification script.
+- `extract_glm.py`: Main OCR extraction logic (GLM-only).
 - `Project_Irys_Spec.md`: Project specification and design document.

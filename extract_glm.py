@@ -18,6 +18,16 @@ DEFAULT_GLM_URL = "https://api.z.ai/api/paas/v4/layout_parsing"
 DEFAULT_GLM_MODEL = "glm-ocr"
 
 
+def warmup() -> Dict[str, Any]:
+    """
+    Validate config and readiness for GLM calls.
+    """
+    api_key = _clean_secret(os.environ.get("GLM_OCR_API_KEY"))
+    if not api_key:
+        raise ValueError("Missing GLM_OCR_API_KEY.")
+    return {"ok": True, "provider": "glm"}
+
+
 def _clean_secret(value: Optional[str]) -> Optional[str]:
     if not value:
         return value

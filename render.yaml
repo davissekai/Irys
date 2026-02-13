@@ -7,9 +7,13 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
-      - key: GCP_PROJECT_ID
+      - key: GLM_OCR_API_KEY
         sync: false
-      - key: DOCAI_PROCESSOR_ID
+      - key: GLM_OCR_BASE_URL
+        value: https://api.z.ai/api/paas/v4/layout_parsing
+      - key: GLM_OCR_MODEL
+        value: glm-ocr
+      - key: FRONTEND_ORIGINS
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false

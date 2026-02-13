@@ -2,10 +2,17 @@ import React, { useRef, useState } from 'react';
 
 interface CaptureScreenProps {
     eventName: string;
+    sessionStats: {
+        photosSaved: number;
+        rowsSaved: number;
+    };
+    notice?: string | null;
     onImageSelected: (file: File) => void;
+    onViewHistory: () => void;
+    onEndSession: () => void;
 }
 
-export const CaptureScreen: React.FC<CaptureScreenProps> = ({ eventName, onImageSelected }) => {
+export const CaptureScreen: React.FC<CaptureScreenProps> = ({ eventName, sessionStats, notice, onImageSelected, onViewHistory, onEndSession }) => {
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -30,7 +37,16 @@ export const CaptureScreen: React.FC<CaptureScreenProps> = ({ eventName, onImage
                 <p className="text-zinc-400">
                     Session: <span className="text-accent font-medium">{eventName}</span>
                 </p>
+                <p className="text-xs text-zinc-500 font-mono">
+                    Photos saved: {sessionStats.photosSaved} | Rows saved: {sessionStats.rowsSaved}
+                </p>
             </div>
+
+            {notice && (
+                <div className="px-3 py-2 text-sm border border-emerald-700/60 bg-emerald-950/30 text-emerald-200 rounded">
+                    {notice}
+                </div>
+            )}
 
             <div
                 onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
@@ -73,10 +89,24 @@ export const CaptureScreen: React.FC<CaptureScreenProps> = ({ eventName, onImage
                 />
             </div>
 
-            <div className="flex justify-center">
+            <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 text-xs text-zinc-600">
                     <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></div>
                     Waiting for input
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={onViewHistory}
+                        className="px-4 py-2 text-xs uppercase tracking-wide border border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600 rounded-sm transition-colors"
+                    >
+                        View History
+                    </button>
+                    <button
+                        onClick={onEndSession}
+                        className="px-4 py-2 text-xs uppercase tracking-wide border border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600 rounded-sm transition-colors"
+                    >
+                        End Session
+                    </button>
                 </div>
             </div>
         </div>

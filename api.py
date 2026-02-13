@@ -6,45 +6,22 @@ import os
 import json
 import asyncio
 import tempfile
-from typing import List, Dict, Any
+from typing import Dict, Any
+from uuid import uuid4
 from dotenv import load_dotenv
 import db_utils
 
 # Load environment variables from .env file
 load_dotenv()
 
-# OCR provider selection
-# Supported: auto | docai | glm | paddle
-OCR_PROVIDER = os.environ.get("OCR_PROVIDER", "auto").strip().lower()
-
-GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID")
-DOCAI_PROCESSOR_ID = os.environ.get("DOCAI_PROCESSOR_ID")
-GOOGLE_APPLICATION_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-HAS_DOCAI_CREDS = bool(
-    GOOGLE_APPLICATION_CREDENTIALS and os.path.exists(GOOGLE_APPLICATION_CREDENTIALS)
-)
-
+# OCR provider (GLM only)
+OCR_PROVIDER = "glm"
 GLM_OCR_API_KEY = os.environ.get("GLM_OCR_API_KEY")
-HAS_GLM = bool(GLM_OCR_API_KEY)
+if not GLM_OCR_API_KEY:
+    print("[API] Warning: GLM_OCR_API_KEY is missing.")
 
-if OCR_PROVIDER == "auto":
-    if GCP_PROJECT_ID and DOCAI_PROCESSOR_ID and HAS_DOCAI_CREDS:
-        OCR_PROVIDER = "docai"
-    elif HAS_GLM:
-        OCR_PROVIDER = "glm"
-    else:
-        OCR_PROVIDER = "paddle"
-
-extractor = None
-if OCR_PROVIDER == "docai":
-    import extract_docai as extractor
-    print("[API] Using Google Document AI for extraction")
-elif OCR_PROVIDER == "glm":
-    import extract_glm as extractor
-    print("[API] Using GLM-OCR API for extraction")
-else:
-    import extract as extractor
-    print("[API] Using PaddleOCR for extraction")
+import extract_glm as extractor
+print("[API] Using GLM-OCR API for extraction")
 
 app = FastAPI()
 EXTRACT_TIMEOUT_SECONDS = float(os.environ.get("EXTRACT_TIMEOUT_SECONDS", "90"))
@@ -52,11 +29,18 @@ FRONTEND_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
         "FRONTEND_ORIGINS",
-        "http://127.0.0.1:4174,http://localhost:4174,http://127.0.0.1:4173,http://localhost:4173"
+        "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4174,http://localhost:4174,http://127.0.0.1:4173,http://localhost:4173"
     ).split(",")
     if origin.strip()
 ]
 FRONTEND_ORIGIN_REGEX = os.environ.get("FRONTEND_ORIGIN_REGEX")
+AUTO_WARMUP_ON_STARTUP = os.environ.get("AUTO_WARMUP_ON_STARTUP", "1").strip() not in {"0", "false", "False"}
+
+_WARMUP_STATE = {
+    "attempted": False,
+    "ok": False,
+    "error": None,
+}
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -70,7 +54,46 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"status": "ready", "message": "Irys API is live", "ocr_provider": OCR_PROVIDER}
+    return {
+        "status": "ready",
+        "message": "Irys API is live",
+        "ocr_provider": OCR_PROVIDER,
+        "warmup": _WARMUP_STATE,
+    }
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "ocr_provider": OCR_PROVIDER, "warmup": _WARMUP_STATE}
+
+
+def _run_extractor_warmup():
+    extractor.warmup()
+
+
+async def _warmup_extractor():
+    _WARMUP_STATE["attempted"] = True
+    try:
+        await run_in_threadpool(_run_extractor_warmup)
+        _WARMUP_STATE["ok"] = True
+        _WARMUP_STATE["error"] = None
+        return {"ok": True, "ocr_provider": OCR_PROVIDER}
+    except Exception as e:
+        _WARMUP_STATE["ok"] = False
+        _WARMUP_STATE["error"] = str(e)
+        return {"ok": False, "ocr_provider": OCR_PROVIDER, "error": str(e)}
+
+
+@app.post("/warmup")
+async def warmup():
+    return await _warmup_extractor()
+
+
+@app.on_event("startup")
+async def startup_warmup():
+    if AUTO_WARMUP_ON_STARTUP:
+        result = await _warmup_extractor()
+        print(f"[API] Warmup result: {result}")
 
 @app.post("/extract")
 async def extract_api(
@@ -92,16 +115,11 @@ async def extract_api(
         # 3. Run Extraction
         print(f"Processing {temp_filename} with columns: {column_list}")
 
-        if OCR_PROVIDER == "docai":
-            extraction_fn = lambda: extractor.extract_table_docai(temp_filename, columns=column_list)
-        elif OCR_PROVIDER == "glm":
-            extraction_fn = lambda: extractor.extract_table_glm(
-                temp_filename,
-                columns=column_list,
-                mime_type=file.content_type
-            )
-        else:
-            extraction_fn = lambda: extractor.extract_table(temp_filename, columns=column_list)
+        extraction_fn = lambda: extractor.extract_table_glm(
+            temp_filename,
+            columns=column_list,
+            mime_type=file.content_type
+        )
 
         try:
             result = await asyncio.wait_for(
@@ -150,12 +168,13 @@ async def export_db(payload: Dict[str, Any]):
     try:
         event_name = payload.get("eventName")
         rows = payload.get("rows")
+        export_id = (payload.get("exportId") or "").strip() or str(uuid4())
         
-        if not event_name or not rows:
+        if not event_name or not isinstance(rows, list) or len(rows) == 0:
             raise HTTPException(status_code=400, detail="Missing eventName or rows in payload")
             
         print(f"[API] Exporting {len(rows)} rows for event '{event_name}' to DB")
-        result = await run_in_threadpool(lambda: db_utils.save_to_db(event_name, rows))
+        result = await run_in_threadpool(lambda: db_utils.save_to_db(event_name, rows, export_id=export_id))
         
         return result
 
@@ -163,6 +182,30 @@ async def export_db(payload: Dict[str, Any]):
         raise
     except Exception as e:
         print(f"Export Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/exports/{event_name}")
+async def list_exports(event_name: str):
+    try:
+        exports = await run_in_threadpool(lambda: db_utils.list_exports(event_name))
+        return {"eventName": event_name, "exports": exports}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"List exports error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/exports/{event_name}/{export_id}")
+async def get_export_rows(event_name: str, export_id: str):
+    try:
+        rows = await run_in_threadpool(lambda: db_utils.get_export_rows(event_name, export_id))
+        return {"eventName": event_name, "exportId": export_id, "rowCount": len(rows), "rows": rows}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Get export rows error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

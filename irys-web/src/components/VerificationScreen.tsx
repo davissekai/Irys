@@ -1,20 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import type { TableRow } from '../types';
 
 interface VerificationScreenProps {
     imageFile: File | null;
     columns: string[];
-    initialRows: any[];
+    initialRows: TableRow[];
     statusMessage?: string | null;
     onBack: () => void;
-    onExport: (data: any[]) => void;
+    onSaveAndContinue: (data: TableRow[]) => void;
+    onSaveAndEnd: (data: TableRow[]) => void;
 }
 
-export const VerificationScreen: React.FC<VerificationScreenProps> = ({ imageFile, columns: propColumns, initialRows, statusMessage, onBack, onExport }) => {
-    const [rows, setRows] = useState<Record<string, string>[]>(initialRows || []);
-
-    // DEBUG: Log what we receive
-    console.log("[VerificationScreen] initialRows:", initialRows);
-    console.log("[VerificationScreen] rows state:", rows);
+export const VerificationScreen: React.FC<VerificationScreenProps> = ({ imageFile, columns: propColumns, initialRows, statusMessage, onBack, onSaveAndContinue, onSaveAndEnd }) => {
+    const [rows, setRows] = useState<TableRow[]>(initialRows || []);
 
     // Derive actual columns from row keys if available (most reliable)
     // This ensures columns match the exact keys in the data
@@ -22,38 +20,28 @@ export const VerificationScreen: React.FC<VerificationScreenProps> = ({ imageFil
         ? Object.keys(rows[0]).filter(k => k !== '__meta')
         : propColumns;
 
-    console.log("[VerificationScreen] columns:", columns);
-
-    // Sync with parent when initialRows changes (e.g., after API call completes)
-    useEffect(() => {
-        console.log("[VerificationScreen] useEffect triggered, initialRows:", initialRows);
-        if (initialRows && initialRows.length > 0) {
-            setRows(initialRows);
-        }
-    }, [initialRows]);
-
     const [imageUrl] = useState<string | null>(imageFile ? URL.createObjectURL(imageFile) : null);
     const [zoom, setZoom] = useState(1);
 
     const updateCell = (rowIndex: number, col: string, value: string) => {
         const newRows = [...rows];
-        newRows[rowIndex][col] = value;
+        newRows[rowIndex] = { ...newRows[rowIndex], [col]: value };
         setRows(newRows);
     };
 
     const isSaving = statusMessage?.includes("Saving") || statusMessage?.includes("Exporting");
 
     return (
-        <div className="flex flex-col h-[calc(100vh-6rem)] gap-4 animate-in fade-in duration-500">
+        <div className="flex flex-col gap-4 animate-in fade-in duration-500 min-h-0">
             {/* Header Actions */}
-            <div className="flex items-center justify-between border-b border-border pb-4">
+            <div className="flex items-center justify-between border-b border-border pb-4 gap-2">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                     Verify Data
                     <span className="text-xs font-normal text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-full">
                         {rows.length} rows
                     </span>
                 </h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap justify-end">
                     <button
                         onClick={onBack}
                         disabled={isSaving}
@@ -62,24 +50,34 @@ export const VerificationScreen: React.FC<VerificationScreenProps> = ({ imageFil
                         &larr; Back
                     </button>
                     <button
-                        onClick={() => !isSaving && onExport(rows)}
-                        disabled={isSaving}
+                        onClick={() => !isSaving && onSaveAndContinue(rows)}
+                        disabled={isSaving || rows.length === 0}
                         className={`px-4 py-2 rounded-sm text-sm font-medium shadow-lg flex items-center gap-2 transition-all ${isSaving
                                 ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
                                 : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20"
                             }`}
                     >
-                        <span>{isSaving ? "Exporting..." : "Export Database"}</span>
+                        <span>{isSaving ? "Saving..." : "Save & Continue"}</span>
                         <svg className={`w-4 h-4 ${isSaving ? "animate-pulse" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                     </button>
+                    <button
+                        onClick={() => !isSaving && onSaveAndEnd(rows)}
+                        disabled={isSaving || rows.length === 0}
+                        className={`px-4 py-2 rounded-sm text-sm font-medium transition-colors ${isSaving
+                                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-100"
+                            }`}
+                    >
+                        Save & End Session
+                    </button>
                 </div>
             </div>
 
-            <div className="flex-1 flex gap-6 overflow-hidden min-h-0">
+            <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 min-h-0">
                 {/* Image Viewer (Left Panel) */}
-                <div className="flex-1 bg-black/40 border border-border rounded-lg overflow-hidden relative group shadow-inner">
+                <div className="w-full lg:flex-1 bg-black/40 border border-border rounded-lg overflow-hidden relative group shadow-inner h-[44vh] lg:h-[calc(100vh-12rem)] min-h-[280px]">
                     {imageUrl ? (
                         <div className="w-full h-full overflow-auto flex items-start justify-center p-4">
                             <img
@@ -107,7 +105,7 @@ export const VerificationScreen: React.FC<VerificationScreenProps> = ({ imageFil
                 </div>
 
                 {/* Data Grid (Right Panel) */}
-                <div className="flex-1 border border-border rounded-lg bg-surface/30 overflow-hidden flex flex-col shadow-sm">
+                <div className="w-full lg:flex-1 border border-border rounded-lg bg-surface/30 overflow-hidden flex flex-col shadow-sm h-[52vh] lg:h-[calc(100vh-12rem)] min-h-[320px]">
                     {statusMessage && (
                         <div className="mx-3 mt-3 px-3 py-2 text-sm border border-amber-700/60 bg-amber-950/30 text-amber-200 rounded">
                             {statusMessage}
@@ -142,10 +140,10 @@ export const VerificationScreen: React.FC<VerificationScreenProps> = ({ imageFil
                                             <td key={col} className="p-0 relative border-r border-zinc-800/30 last:border-r-0">
                                                 <input
                                                     value={(() => {
-                                                        if (row[col] !== undefined) return row[col];
+                                                        if (row[col] !== undefined && row[col] !== null) return String(row[col]);
                                                         // Case-insensitive fallback
                                                         const key = Object.keys(row).find(k => k.toLowerCase() === col.toLowerCase());
-                                                        return key ? row[key] : '';
+                                                        return key && row[key] !== null && row[key] !== undefined ? String(row[key]) : '';
                                                     })()}
                                                     onChange={(e) => updateCell(rIdx, col, e.target.value)}
                                                     className="w-full h-full bg-transparent px-4 py-3 text-sm text-zinc-200 outline-none focus:bg-accent/5 focus:shadow-[inset_0_0_0_1px_var(--color-accent)] transition-all font-medium placeholder-zinc-700"
